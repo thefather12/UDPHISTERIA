@@ -40,7 +40,7 @@ systemctl daemon-reload
 systemctl start udpmod
 systemctl enable udpmod
 
-echo " OBFS: ${OBFS}" > ${dir}/UDPMOD/data
+echo " obfs: ${OBFS}" > ${dir}/UDPMOD/data
 echo "PUERTOS: 36712" >> ${dir}/UDPMOD/data
 echo "RANGO DE PUERTOS: 10000:65000" >> ${dir}/UDPMOD/data
 cat ${dir}/UDPMOD/data
