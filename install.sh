@@ -44,3 +44,7 @@ echo " obfs: ${OBFS}" > ${dir}/UDPMOD/data
 echo "PUERTOS: 36712" >> ${dir}/UDPMOD/data
 echo "RANGO DE PUERTOS: 10000:65000" >> ${dir}/UDPMOD/data
 cat ${dir}/UDPMOD/data
+ echo -ne "\n\033[1;31mENTER \033[1;33mpara volver al \033[1;32mMENU!\033[0m"; read
+   menu
+
+   fi
