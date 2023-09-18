@@ -1,0 +1,19 @@
+{
+   "listen": ":36712",
+	"cert": "instDir/UDPMOD/udpmod.server.crt",
+	"key": "instDir/UDPMOD/udpmod.server.key",
+	"protocol": "udp",
+	"up": "100 Mbps",
+	"up_mbps": 100,
+	"down": "100 Mbps",
+	"down_mbps": 100,
+	"disable_udp": false,
+	"obfs": "setobfs",
+	//"alpn": "h3",
+	"auth": {
+		"mode": "external",
+		"config": {
+			"cmd": "instDir/UDPMOD/autSSH"
+		}
+	}
+}
