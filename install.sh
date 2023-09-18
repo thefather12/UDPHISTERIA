@@ -39,7 +39,7 @@ install -Dm644 ${dir}/UDPMOD/udpmod.service /etc/systemd/system
 systemctl daemon-reload
 systemctl start udpmod
 systemctl enable udpmod
-echo -ne "\n\033[1;31mCOPIE LOS DATOS Y PRECIONE ENTER \033[1;32m"
+
 echo " OBFS: ${OBFS}" > ${dir}/UDPMOD/data
 echo "PUERTOS: 36712" >> ${dir}/UDPMOD/data
 echo "RANGO DE PUERTOS: 10000:65000" >> ${dir}/UDPMOD/data
