@@ -41,7 +41,7 @@ systemctl start udpmod
 systemctl enable udpmod
 
 echo " OBFS: ${OBFS}" > ${dir}/UDPMOD/data
-echo "PUERTOS: 36712" >> ${dir}/UDPMOD/data
+echo "PUERTOS: 36715" >> ${dir}/UDPMOD/data
 echo "RANGO DE PUERTOS: 10000:65000" >> ${dir}/UDPMOD/data
 cat ${dir}/UDPMOD/data
  echo -ne "\n\033[1;31mCOPIE LOS DATOS Y PRECIONE ENTER \033[1;33mPARA VOLVER AL \033[1;32mMENU!\033[0m"; read
