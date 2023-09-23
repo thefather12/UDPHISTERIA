@@ -1,5 +1,5 @@
 {
-   "listen": ":36712",
+   "listen": ":35535",
 	"cert": "instDir/UDPMOD/udpmod.server.crt",
 	"key": "instDir/UDPMOD/udpmod.server.key",
 	"protocol": "udp",
