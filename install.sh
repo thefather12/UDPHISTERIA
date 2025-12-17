@@ -1,129 +1,116 @@
 #!/bin/bash
 
-# --- CONFIGURACIÓN DE RUTAS ---
-export dir=$(pwd)
-export repo_dir="${dir}/UDPMOD"
+# --- VARIABLES DEL INSTALADOR ORIGINAL ---
+CONFIG_DIR="/etc/udpmod"
+CONFIG_FILE="$CONFIG_DIR/config.json"
+BIN_PATH="/usr/local/bin/udpmod"
+SERVICE_NAME="udpmod-server.service"
 
-# Instalación de Figlet para el banner
-if ! command -v figlet &> /dev/null; then
-    apt update -y && apt install figlet -y &> /dev/null
-fi
+# --- COLORES ---
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
 
-# --- FUNCIONES ---
-
-mostrar_banner() {
-    clear
-    echo -e "\e[1;36m"
-    figlet "UDPMOD"
-    echo -e "\e[0m"
-    echo "=========================================="
+# --- FUNCIONES DE EXTRACCIÓN (Basadas en tu archivo) ---
+get_config_val() {
+    if [ -f "$CONFIG_FILE" ]; then
+        grep "$1" "$CONFIG_FILE" | sed 's/"\|,//g' | awk '{print $2}'
+    else
+        echo "N/A"
+    fi
 }
 
-instalacion_completa() {
-    mostrar_banner
-    # El script original pedía el dominio aquí
-    read -p " INGRESA AQUI TU DOMINIO (o deja vacío para IP): " domain
-    [[ -z "$domain" ]] && domain=$(wget -qO- eth0.me)
-
-    echo "Instalando dependencias y clonando repositorio..."
-    apt update -y; apt upgrade -y; apt install git openssl -y
-    
-    [[ -d "$repo_dir" ]] && rm -rf "$repo_dir"
-    git clone https://github.com/rudi9999/UDPMOD.git
-
-    # Generación de variables técnicas
-    OBFS=$(head /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c 8)
-    # El AUTH suele ser dinámico o fijo según el binario, aquí generamos uno:
-    AUTH=$(head /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c 12)
-    interfas=$(ip -4 route ls | grep default | grep -Po '(?<=dev )(\S+)' | head -1)
-    sys=$(which sysctl)
-    ip4t=$(which iptables)
-    ip6t=$(which ip6tables)
-
-    # Generación de Certificados SSL (Requerido para que el binario arranque)
-    openssl genrsa -out "${repo_dir}/udpmod.ca.key" 2048
-    openssl req -new -x509 -days 3650 -key "${repo_dir}/udpmod.ca.key" -subj "/C=CN/ST=GD/L=SZ/O=Udpmod, Inc./CN=Udpmod Root CA" -out "${repo_dir}/udpmod.ca.crt"
-    openssl req -newkey rsa:2048 -nodes -keyout "${repo_dir}/udpmod.server.key" -subj "/C=CN/ST=GD/L=SZ/O=Udpmod, Inc./CN=${domain}" -out "${repo_dir}/udpmod.server.csr"
-    openssl x509 -req -extfile <(printf "subjectAltName=DNS:${domain},DNS:${domain}") -days 3650 -in "${repo_dir}/udpmod.server.csr" -CA "${repo_dir}/udpmod.ca.crt" -CAkey "${repo_dir}/udpmod.ca.key" -CAcreateserial -out "${repo_dir}/udpmod.server.crt"
-
-    # Modificación de archivos (sed) - Usando las etiquetas del script original
-    sed -i "s/setobfs/${OBFS}/" "${repo_dir}/config.json"
-    # Si el config.json tiene etiqueta para auth:
-    sed -i "s/setauth/${AUTH}/" "${repo_dir}/config.json" 2>/dev/null 
-    
-    sed -i "s#instDir#${repo_dir}#g" "${repo_dir}/config.json"
-    sed -i "s#instDir#${repo_dir}#g" "${repo_dir}/udpmod.service"
-    sed -i "s#iptb#${interfas}#g" "${repo_dir}/udpmod.service"
-    sed -i "s#sysb#${sys}#g" "${repo_dir}/udpmod.service"
-    sed -i "s#ip4tbin#${ip4t}#g" "${repo_dir}/udpmod.service"
-    sed -i "s#ip6tbin#${ip6t}#g" "${repo_dir}/udpmod.service"
-
-    # Permisos y arranque
-    chmod +x "${repo_dir}/"*
-    cp "${repo_dir}/udpmod.service" /etc/systemd/system/
-    
-    systemctl daemon-reload
-    systemctl enable udpmod
-    systemctl restart udpmod
-
-    # Mostrar datos finales como el script original
-    echo -e "\n\e[1;32m--- DATOS DE CONEXIÓN ---\e[0m"
-    echo " DOMINIO: ${domain}"
-    echo " OBFS: ${OBFS}"
-    echo " AUTH: ${AUTH}"
-    echo " PUERTO: 36715"
-    echo " RANGO: 10000:65000"
-    echo "--------------------------"
-    
-    # Guardar datos para consulta posterior
-    echo "OBFS: ${OBFS} | AUTH: ${AUTH} | DOMINIO: ${domain}" > "${repo_dir}/data"
-    
-    echo -ne "\n\033[1;31mCOPIE LOS DATOS Y PRESIONE ENTER PARA IR AL MENU!\033[0m"; read
+# --- LÓGICA DE INSTALACIÓN (Referencia a installUDP.sh) ---
+ejecutar_instalacion() {
+    echo -e "${YELLOW}Iniciando instalación desde fuente oficial...${NC}"
+    # Aquí puedes llamar a tu script original o integrar la lógica de:
+    # 1. Descarga de binario
+    # 2. Generación de certificados SSL
+    # 3. Configuración de iptables
+    bash <(curl -Ls https://raw.githubusercontent.com/rudi9999/UDPMOD/main/install.sh) # Ejemplo de llamada
+    read -p "Instalación finalizada. Presiona Enter para abrir el menú."
 }
 
-# --- MENÚ ---
-menu() {
+# --- MENÚ INTERACTIVO ---
+mostrar_menu() {
     while true; do
-        mostrar_banner
-        echo " 1) ACTIVAR / REINSTALAR UDPMOD"
-        echo " 2) Estado del servicio"
-        echo " 3) Cambio de dominio"
-        echo " 4) Agregar usuario"
-        echo " 5) Eliminar usuario"
-        echo " 6) Lista de usuarios"
-        echo " 7) Desinstalar UDPMOD"
-        echo " 0) Salir"
-        echo "=========================================="
-        read -p "Seleccione una opción: " opcion
+        clear
+        IP_PUB=$(curl -s https://api.ipify.org || echo "127.0.0.1")
+        PUERTO=$(get_config_val "listen")
+        OBFS_VAL=$(get_config_val "obfs")
+        ESTADO=$(systemctl is-active $SERVICE_NAME 2>/dev/null)
+        
+        [[ "$ESTADO" == "active" ]] && ESTADO_TXT="${GREEN}[ON]${NC}" || ESTADO_TXT="${RED}[OFF]${NC}"
+
+        echo -e "${RED}---------------------------------------${NC}"
+        echo -e "      ${BOLD}ADMINISTRACION UDPMOD v6${NC}"
+        echo -e "${RED}---------------------------------------${NC}"
+        echo -e " ${CYAN}BINARIO:${NC} Hysteria-V2"
+        echo -e " ${CYAN}IP:${NC} $IP_PUB"
+        echo -e " ${CYAN}OBFS:${NC} $OBFS_VAL"
+        echo -e " ${CYAN}PUERTO:${NC} $PUERTO"
+        echo -e "${RED}---------------------------------------${NC}"
+        echo -e " ${GREEN}[1]${NC} > CA TLS CLIENTE"
+        echo -e " ${GREEN}[2]${NC} > MODIFICAR OBFS"
+        echo -e " ${GREEN}[3]${NC} > MODIFICAR RANGOS IPTABLES"
+        echo -e " ${GREEN}[4]${NC} > MODIFICAR PUERTO"
+        echo -e " ${RED}---------------------------------------${NC}"
+        echo -e " ${GREEN}[5]${NC} > ${YELLOW}REINICIAR SERVICIO${NC}"
+        echo -e " ${GREEN}[6]${NC} > INICIAR/PARAR SERVICIO $ESTADO_TXT"
+        echo -e " ${GREEN}[7]${NC} > ESTADO DEL SERVICIO"
+        echo -e " ${GREEN}[8]${NC} > LOG EN TIEMPO REAL"
+        echo -e " ${RED}---------------------------------------${NC}"
+        echo -e " ${GREEN}[10]${NC} > ${RED}DESINSTALAR UDPMOD${NC}"
+        echo -e " ${GREEN}[0]${NC} > SALIR"
+        echo -e "${RED}---------------------------------------${NC}"
+        echo -ne " Selecciona una opcion: "
+        read opcion
 
         case $opcion in
-            1) instalacion_completa ;;
+            1) 
+                echo -e "${YELLOW}Certificado CA:${NC}"
+                cat "$CONFIG_DIR/udpmod.ca.crt" 2>/dev/null || echo "No encontrado"
+                read -p "Presiona Enter..." ;;
             2) 
-                echo "--- ESTADO ---"
-                systemctl status udpmod --no-pager | grep -E "Active:|Main PID:"
-                read -p "Enter para volver..." 
+                read -p "Nuevo valor OBFS: " NEW_OBFS
+                sed -i "s/\"obfs\": \".*\"/\"obfs\": \"$NEW_OBFS\"/" "$CONFIG_FILE"
+                systemctl restart $SERVICE_NAME
                 ;;
-            3) 
-                read -p "Nuevo Dominio: " domain
-                # Regenerar certificados para el nuevo dominio
-                openssl req -newkey rsa:2048 -nodes -keyout "${repo_dir}/udpmod.server.key" -subj "/C=CN/ST=GD/L=SZ/O=Udpmod, Inc./CN=${domain}" -out "${repo_dir}/udpmod.server.csr"
-                openssl x509 -req -extfile <(printf "subjectAltName=DNS:${domain},DNS:${domain}") -days 3650 -in "${repo_dir}/udpmod.server.csr" -CA "${repo_dir}/udpmod.ca.crt" -CAkey "${repo_dir}/udpmod.ca.key" -CAcreateserial -out "${repo_dir}/udpmod.server.crt"
-                systemctl restart udpmod
-                echo "Dominio actualizado"; sleep 1 
+            4) 
+                read -p "Nuevo Puerto (ej. :36712): " NEW_PORT
+                sed -i "s/\"listen\": \":.*\"/\"listen\": \"$NEW_PORT\"/" "$CONFIG_FILE"
+                systemctl restart $SERVICE_NAME
                 ;;
-            4) read -p "Usuario: " u; echo "$u" >> "${repo_dir}/users.db"; echo "Agregado"; sleep 1 ;;
-            5) read -p "Eliminar: " u; sed -i "/^$u$/d" "${repo_dir}/users.db"; echo "Borrado"; sleep 1 ;;
-            6) echo "--- USUARIOS ---"; cat "${repo_dir}/users.db" 2>/dev/null; read -p "Enter..." ;;
-            7) 
-                systemctl stop udpmod; systemctl disable udpmod
-                rm /etc/systemd/system/udpmod.service; rm -rf "$repo_dir"
-                echo "Desinstalado"; sleep 1; exit 0 
-                ;;
+            5) systemctl restart $SERVICE_NAME ;;
+            6) 
+                if [[ "$ESTADO" == "active" ]]; then systemctl stop $SERVICE_NAME
+                else systemctl start $SERVICE_NAME; fi ;;
+            7) systemctl status $SERVICE_NAME; read -p "Enter..." ;;
+            8) journalctl -u $SERVICE_NAME -f ;;
+            10) 
+                # Lógica de eliminación de tu script
+                systemctl stop $SERVICE_NAME
+                rm -rf "$CONFIG_DIR" "$BIN_PATH"
+                echo "UDPMOD eliminado."
+                exit 0 ;;
             0) exit 0 ;;
-            *) echo "Opción no válida" ;;
+            *) echo "Opción inválida"; sleep 1 ;;
         esac
     done
 }
 
-menu
+# --- FLUJO PRINCIPAL ---
+if [ -f "$BIN_PATH" ]; then
+    mostrar_menu
+else
+    echo -e "${CYAN}UDPMOD no detectado.${NC}"
+    echo "1) Instalar ahora"
+    echo "2) Salir"
+    read -p "Opción: " opt
+    [[ "$opt" == "1" ]] && ejecutar_instalacion && mostrar_menu || exit 0
+fi
 
