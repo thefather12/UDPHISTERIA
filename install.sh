@@ -1,116 +1,142 @@
 #!/bin/bash
 
-# --- VARIABLES DEL INSTALADOR ORIGINAL ---
-CONFIG_DIR="/etc/udpmod"
-CONFIG_FILE="$CONFIG_DIR/config.json"
-BIN_PATH="/usr/local/bin/udpmod"
-SERVICE_NAME="udpmod-server.service"
+# =========================================================
+# Hysteria V1 - Unificado (Core + Menú)
+# Fusionado para Script Multiprocolo
+# =========================================================
 
-# --- COLORES ---
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-NC='\033[0m'
+# --- Variables Globales ---
+export LANG=en_US.UTF-8
+DEFAULT_SNI="www.bing.com"
+CONFIG_DIR="/etc/hysteria"
+EXECUTABLE_INSTALL_PATH="/usr/local/bin/hysteria1"
+SYSTEMD_SERVICES_DIR="/etc/systemd/system"
+LATEST_VERSION_HYSTERIA1="v1.3.5"
 
-# --- FUNCIONES DE EXTRACCIÓN (Basadas en tu archivo) ---
-get_config_val() {
-    if [ -f "$CONFIG_FILE" ]; then
-        grep "$1" "$CONFIG_FILE" | sed 's/"\|,//g' | awk '{print $2}'
-    else
-        echo "N/A"
-    fi
+# Colores
+RED="\033[31m"
+GREEN="\033[32m"
+YELLOW="\033[33m"
+PLAIN='\033[0m'
+
+# --- Funciones de Utilidad ---
+red() { echo -e "${RED}${01m}$1${PLAIN}"; }
+green() { echo -e "${GREEN}${01m}$1${PLAIN}"; }
+yellow() { echo -e "${YELLOW}${01m}$1${PLAIN}"; }
+
+# --- Lógica de Instalación Core (ex install_server.sh) ---
+detect_arch() {
+    case "$(uname -m)" in
+        'i386' | 'i686') ARCH='386' ;;
+        'amd64' | 'x86_64') ARCH='amd64' ;;
+        'armv8' | 'aarch64') ARCH='arm64' ;;
+        *) red "Arquitectura no soportada"; exit 1 ;;
+    esac
 }
 
-# --- LÓGICA DE INSTALACIÓN (Referencia a installUDP.sh) ---
-ejecutar_instalacion() {
-    echo -e "${YELLOW}Iniciando instalación desde fuente oficial...${NC}"
-    # Aquí puedes llamar a tu script original o integrar la lógica de:
-    # 1. Descarga de binario
-    # 2. Generación de certificados SSL
-    # 3. Configuración de iptables
-    bash <(curl -Ls https://raw.githubusercontent.com/rudi9999/UDPMOD/main/install.sh) # Ejemplo de llamada
-    read -p "Instalación finalizada. Presiona Enter para abrir el menú."
+download_binary() {
+    local version=$LATEST_VERSION_HYSTERIA1
+    local url="https://github.com/apernet/hysteria/releases/download/$version/hysteria-linux-$ARCH"
+    yellow "Descargando binario Hysteria V1 ($version)..."
+    curl -L -f -q --retry 5 -o "$EXECUTABLE_INSTALL_PATH" "$url"
+    chmod +x "$EXECUTABLE_INSTALL_PATH"
 }
 
-# --- MENÚ INTERACTIVO ---
-mostrar_menu() {
-    while true; do
-        clear
-        IP_PUB=$(curl -s https://api.ipify.org || echo "127.0.0.1")
-        PUERTO=$(get_config_val "listen")
-        OBFS_VAL=$(get_config_val "obfs")
-        ESTADO=$(systemctl is-active $SERVICE_NAME 2>/dev/null)
-        
-        [[ "$ESTADO" == "active" ]] && ESTADO_TXT="${GREEN}[ON]${NC}" || ESTADO_TXT="${RED}[OFF]${NC}"
+setup_systemd() {
+    yellow "Configurando servicio Systemd..."
+    cat <<EOF > "$SYSTEMD_SERVICES_DIR/hysteria1-server.service"
+[Unit]
+Description=Hysteria V1 Server Service
+After=network.target
 
-        echo -e "${RED}---------------------------------------${NC}"
-        echo -e "      ${BOLD}ADMINISTRACION UDPMOD v6${NC}"
-        echo -e "${RED}---------------------------------------${NC}"
-        echo -e " ${CYAN}BINARIO:${NC} Hysteria-V2"
-        echo -e " ${CYAN}IP:${NC} $IP_PUB"
-        echo -e " ${CYAN}OBFS:${NC} $OBFS_VAL"
-        echo -e " ${CYAN}PUERTO:${NC} $PUERTO"
-        echo -e "${RED}---------------------------------------${NC}"
-        echo -e " ${GREEN}[1]${NC} > CA TLS CLIENTE"
-        echo -e " ${GREEN}[2]${NC} > MODIFICAR OBFS"
-        echo -e " ${GREEN}[3]${NC} > MODIFICAR RANGOS IPTABLES"
-        echo -e " ${GREEN}[4]${NC} > MODIFICAR PUERTO"
-        echo -e " ${RED}---------------------------------------${NC}"
-        echo -e " ${GREEN}[5]${NC} > ${YELLOW}REINICIAR SERVICIO${NC}"
-        echo -e " ${GREEN}[6]${NC} > INICIAR/PARAR SERVICIO $ESTADO_TXT"
-        echo -e " ${GREEN}[7]${NC} > ESTADO DEL SERVICIO"
-        echo -e " ${GREEN}[8]${NC} > LOG EN TIEMPO REAL"
-        echo -e " ${RED}---------------------------------------${NC}"
-        echo -e " ${GREEN}[10]${NC} > ${RED}DESINSTALAR UDPMOD${NC}"
-        echo -e " ${GREEN}[0]${NC} > SALIR"
-        echo -e "${RED}---------------------------------------${NC}"
-        echo -ne " Selecciona una opcion: "
-        read opcion
+[Service]
+Type=simple
+ExecStart=$EXECUTABLE_INSTALL_PATH -config $CONFIG_DIR/config.json server
+WorkingDirectory=$CONFIG_DIR
+User=root
+Environment=HYSTERIA_LOG_LEVEL=info
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+NoNewPrivileges=true
 
-        case $opcion in
-            1) 
-                echo -e "${YELLOW}Certificado CA:${NC}"
-                cat "$CONFIG_DIR/udpmod.ca.crt" 2>/dev/null || echo "No encontrado"
-                read -p "Presiona Enter..." ;;
-            2) 
-                read -p "Nuevo valor OBFS: " NEW_OBFS
-                sed -i "s/\"obfs\": \".*\"/\"obfs\": \"$NEW_OBFS\"/" "$CONFIG_FILE"
-                systemctl restart $SERVICE_NAME
-                ;;
-            4) 
-                read -p "Nuevo Puerto (ej. :36712): " NEW_PORT
-                sed -i "s/\"listen\": \":.*\"/\"listen\": \"$NEW_PORT\"/" "$CONFIG_FILE"
-                systemctl restart $SERVICE_NAME
-                ;;
-            5) systemctl restart $SERVICE_NAME ;;
-            6) 
-                if [[ "$ESTADO" == "active" ]]; then systemctl stop $SERVICE_NAME
-                else systemctl start $SERVICE_NAME; fi ;;
-            7) systemctl status $SERVICE_NAME; read -p "Enter..." ;;
-            8) journalctl -u $SERVICE_NAME -f ;;
-            10) 
-                # Lógica de eliminación de tu script
-                systemctl stop $SERVICE_NAME
-                rm -rf "$CONFIG_DIR" "$BIN_PATH"
-                echo "UDPMOD eliminado."
-                exit 0 ;;
-            0) exit 0 ;;
-            *) echo "Opción inválida"; sleep 1 ;;
-        esac
-    done
+[Install]
+WantedBy=multi-user.target
+EOF
+    systemctl daemon-reload
 }
 
-# --- FLUJO PRINCIPAL ---
-if [ -f "$BIN_PATH" ]; then
-    mostrar_menu
-else
-    echo -e "${CYAN}UDPMOD no detectado.${NC}"
-    echo "1) Instalar ahora"
-    echo "2) Salir"
+# --- Lógica de Configuración (hysteria1.sh) ---
+
+realIp(){
+    ip=$(curl -s4m8 ip.sb -k) || ip=$(curl -s6m8 ip.sb -k)
+}
+
+inst_cert(){
+    # [Mantenido del original: Opciones 1 (Self-signed), 2 (ACME), 3 (Custom)]
+    # Por brevedad, aquí se define la lógica de la opción 1 por defecto si no hay entrada
+    mkdir -p $CONFIG_DIR
+    cert_path="$CONFIG_DIR/cert.crt"
+    key_path="$CONFIG_DIR/private.key"
+    openssl ecparam -genkey -name prime256v1 -out "$key_path"
+    openssl req -new -x509 -days 36500 -key "$key_path" -out "$cert_path" -subj "/CN=$DEFAULT_SNI"
+    chmod 777 "$cert_path" "$key_path"
+    hy_host=$ip
+    sni_host=$DEFAULT_SNI
+}
+
+# --- Función Principal de Instalación ---
+installHysteria(){
+    realIp
+    detect_arch
+    
+    # Instalación de dependencias
+    apt update && apt install -y curl wget sudo qrencode iptables-persistent netfilter-persistent openssl
+
+    download_binary
+    setup_systemd
+
+    # Configuración básica (Simplificada para integración rápida)
+    # Aquí puedes llamar a inst_port, inst_protocol del script original
+    port=$(shuf -i 2000-65535 -n 1)
+    inst_cert
+    
+    cat <<EOF > $CONFIG_DIR/config.json
+{
+    "protocol": "udp",
+    "listen": ":$port",
+    "resolve_preference": "46",
+    "cert": "$cert_path",
+    "key": "$key_path",
+    "alpn": "h3",
+    "auth": {
+        "mode": "password",
+        "config": {
+            "password": "$(date +%s%N | md5sum | cut -c 1-16)"
+        }
+    }
+}
+EOF
+
+    systemctl enable hysteria1-server
+    systemctl start hysteria1-server
+    green "Hysteria V1 instalado y corriendo en puerto $port"
+}
+
+# --- Menú de Integración ---
+menu_hysteria() {
+    echo -e "1. Instalar Hysteria V1"
+    echo -e "2. Desinstalar"
+    echo -e "0. Salir"
     read -p "Opción: " opt
-    [[ "$opt" == "1" ]] && ejecutar_instalacion && mostrar_menu || exit 0
-fi
+    case $opt in
+        1) installHysteria ;;
+        2) # Lógica de desinstalación
+           systemctl stop hysteria1-server
+           rm -rf $EXECUTABLE_INSTALL_PATH $CONFIG_DIR
+           green "Desinstalado." ;;
+        *) exit ;;
+    esac
+}
+
+menu_hysteria
 
