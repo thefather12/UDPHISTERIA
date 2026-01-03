@@ -1,128 +1,155 @@
 #!/bin/bash
 
 # =========================================================
-# Hysteria V1 - TODO EN UNO (Instalador + Menú + Editor)
+# Hysteria V1 - Unificado (Instalación + Gestión + OBFS)
 # =========================================================
 
-export LANG=en_US.UTF-8
-
-# --- Matriz de Colores del Usuario ---
+# --- Matriz de Colores ---
 COLOR[0]='\033[1;37m' # Blanco
-COLOR[1]='\e[93m'     # Amarillo
+COLOR[1]='\e[93m'     # Amarillo claro
 COLOR[2]='\e[32m'     # Verde
 COLOR[3]='\e[31m'     # Rojo
 COLOR[4]='\e[34m'     # Azul
 COLOR[5]='\e[95m'     # Magenta
-COLOR[6]='\033[1;97m' # Blanco Brillante
+COLOR[6]='\033[1;97m' # Blanco brillante
 COLOR[7]='\033[36m'   # Cian
 NC='\e[0m'
 
-# --- Variables Globales ---
 CONFIG_DIR="/etc/hysteria"
 CONFIG_FILE="/etc/hysteria/config.json"
 EXECUTABLE="/usr/local/bin/hysteria1"
 SYSTEMD_SERVICE="/etc/systemd/system/hysteria1-server.service"
-LATEST_VERSION="v1.3.5"
+
+# --- Crear comando menu_udp ---
+if [[ ! -f "/usr/local/bin/menu_udp" ]]; then
+    echo "bash $(readlink -f "$0")" > /usr/local/bin/menu_udp
+    chmod +x /usr/local/bin/menu_udp
+fi
 
 # --- Funciones Técnicas ---
-
 detect_arch() {
     case "$(uname -m)" in
         'x86_64') ARCH='amd64' ;;
         'aarch64') ARCH='arm64' ;;
-        'i386' | 'i686') ARCH='386' ;;
-        *) echo -e "${COLOR[3]}Arquitectura no soportada.${NC}"; exit 1 ;;
+        *) ARCH='amd64' ;;
     esac
 }
 
-stop_hysteria() {
+stop_hys() {
     systemctl stop hysteria1-server > /dev/null 2>&1
     pkill -f hysteria1 > /dev/null 2>&1
 }
 
-# --- Función para obtener valores actuales del JSON ---
-get_val() {
-    grep -oP "\"$1\":\s*\"\K[^\"]+" "$CONFIG_FILE"
-}
-
-# --- Menú de Configuración (NUEVO) ---
-change_config() {
+# --- Menú de Modificación (IMPORTANTE) ---
+modify_config() {
     if [[ ! -f "$CONFIG_FILE" ]]; then
-        echo -e "${COLOR[3]}Error: No hay configuración instalada.${NC}"
+        echo -e "${COLOR[3]}Error: Hysteria no está instalado.${NC}"
         sleep 2 && return
     fi
-
+    
     clear
     echo -e "${COLOR[5]}┌──────────────────────────────────────────────┐${NC}"
-    echo -e "${COLOR[5]}│${NC}       ${COLOR[6]}MODIFICAR CONFIGURACIÓN HYSTERIA${NC}       ${COLOR[5]}│${NC}"
+    echo -e "${COLOR[5]}│${NC}        ${COLOR[6]}MODIFICAR CONFIGURACIÓN UDP${NC}          ${COLOR[5]}│${NC}"
     echo -e "${COLOR[5]}└──────────────────────────────────────────────┘${NC}"
-    
-    # Leer valores actuales
-    curr_port=$(grep -oP '"listen":\s*":\K\d+' "$CONFIG_FILE")
-    curr_pass=$(grep -oP '"password":\s*"\K[^"]+' "$CONFIG_FILE")
-    curr_sni=$(grep -oP '"/CN=\K[^"]+' "$CONFIG_DIR/cert.crt" 2>/dev/null || echo "www.bing.com")
-
-    echo -e " ${COLOR[2]}1)${NC} Cambiar Puerto (Actual: $curr_port)"
-    echo -e " ${COLOR[2]}2)${NC} Cambiar Contraseña (Actual: $curr_pass)"
-    echo -e " ${COLOR[2]}3)${NC} Cambiar SNI (Actual: $curr_sni)"
+    echo -e " ${COLOR[2]}1)${NC} Cambiar Puerto UDP"
+    echo -e " ${COLOR[2]}2)${NC} Cambiar Contraseña Auth"
+    echo -e " ${COLOR[2]}3)${NC} Configurar/Cambiar OBFS"
     echo -e " ${COLOR[2]}0)${NC} Volver"
     echo ""
-    read -p "Seleccione: " conf_opt
+    echo -ne "${COLOR[1]}Seleccione una opción:${NC} "
+    read m_opt
 
-    case $conf_opt in
+    case $m_opt in
         1)
-            read -p "Nuevo puerto: " new_port
-            sed -i "s/\"listen\": \":$curr_port\"/\"listen\": \":$new_port\"/g" "$CONFIG_FILE"
+            echo -ne "${COLOR[7]}Ingrese nuevo puerto: ${COLOR[6]}"
+            read n_port
+            sed -i "s/\"listen\": \":.*/\"listen\": \":$n_port\",/g" "$CONFIG_FILE"
             ;;
         2)
-            read -p "Nueva contraseña: " new_pass
-            sed -i "s/\"password\": \"$curr_pass\"/\"password\": \"$new_pass\"/g" "$CONFIG_FILE"
+            echo -ne "${COLOR[7]}Ingrese nueva contraseña Auth: ${COLOR[6]}"
+            read n_pass
+            sed -i "s/\"password\": \".*\"/\"password\": \"$n_pass\"/g" "$CONFIG_FILE"
             ;;
         3)
-            read -p "Nuevo SNI: " new_sni
-            openssl req -new -x509 -days 36500 -nodes -key "$CONFIG_DIR/private.key" -out "$CONFIG_DIR/cert.crt" -subj "/CN=$new_sni"
+            echo -e "${COLOR[7]}Seleccione tipo de Ofuscación:${NC}"
+            echo -e " ${COLOR[2]}1)${NC} OBFS (Solo ofuscación)"
+            echo -e " ${COLOR[2]}2)${NC} OBFS + AUTH (Recomendado)"
+            echo -ne "${COLOR[1]}Opción: ${NC}"
+            read o_type
+            echo -ne "${COLOR[7]}Ingrese nueva contraseña de Ofuscación: ${COLOR[6]}"
+            read n_obfs
+            # Limpiar obfs anterior
+            sed -i '/"obfs":/d' "$CONFIG_FILE"
+            # Insertar nueva configuración de obfs
+            sed -i "3i    \"obfs\": \"$n_obfs\"," "$CONFIG_FILE"
+            echo -e "${COLOR[2]}OBFS actualizado.${NC}"
             ;;
         0) return ;;
     esac
-
+    
     systemctl restart hysteria1-server
-    echo -e "${COLOR[2]}Configuración actualizada y servicio reiniciado.${NC}"
+    echo -e "${COLOR[2]}Cambios aplicados con éxito.${NC}"
     sleep 2
 }
 
-# --- Función de Instalación ---
-install_process() {
+# --- Proceso de Instalación ---
+install_hys() {
     clear
-    echo -e "${COLOR[4]}Iniciando instalación...${NC}"
+    echo -e "${COLOR[5]}==============================================${NC}"
+    echo -e "      ${COLOR[6]}INSTALACIÓN HYSTERIA V1 UNIFICADO${NC}"
+    echo -e "${COLOR[5]}==============================================${NC}"
+    
     apt-get update && apt-get install -y curl wget openssl qrencode
     
+    stop_hys
     detect_arch
-    stop_hysteria
-    
     mkdir -p "$CONFIG_DIR"
-    local url="https://github.com/apernet/hysteria/releases/download/$LATEST_VERSION/hysteria-linux-$ARCH"
-    wget -qO "$EXECUTABLE" "$url" && chmod +x "$EXECUTABLE"
 
-    # Configuración inicial
-    read -p "Puerto UDP (Enter aleatorio): " port
+    # Datos con realce de color
+    echo -e -n "${COLOR[7]}➤ Puerto UDP (Enter aleatorio): ${COLOR[6]}"
+    read port
     [[ -z "$port" ]] && port=$(shuf -i 2000-65000 -n 1)
-    read -p "Contraseña: " pass
-    [[ -z "$pass" ]] && pass=$(date +%s%N | md5sum | cut -c 1-12)
 
-    # RNG Fix
+    echo -e -n "${COLOR[7]}➤ Contraseña Auth (Enter aleatorio): ${COLOR[6]}"
+    read password
+    [[ -z "$password" ]] && password=$(date +%s%N | md5sum | cut -c 1-12)
+
+    echo -e "${COLOR[7]}➤ Configurar Ofuscación:${NC}"
+    echo -e "  ${COLOR[2]}1)${NC} OBFS"
+    echo -e "  ${COLOR[2]}2)${NC} OBFS + AUTH"
+    echo -e "  ${COLOR[2]}3)${NC} Sin Ofuscación"
+    echo -ne "${COLOR[1]}  Seleccione opción: ${COLOR[6]}"
+    read obfs_opt
+    
+    obfs_line=""
+    if [[ "$obfs_opt" == "1" || "$obfs_opt" == "2" ]]; then
+        echo -ne "${COLOR[7]}  ➤ Ingrese clave de ofuscación: ${COLOR[6]}"
+        read obfs_key
+        obfs_line="\"obfs\": \"$obfs_key\","
+    fi
+
+    # Descarga e Instalación
+    wget -qO "$EXECUTABLE" "https://github.com/apernet/hysteria/releases/download/v1.3.5/hysteria-linux-$ARCH"
+    chmod +x "$EXECUTABLE"
+
+    # Certs Fix RNG
     export RANDFILE=$CONFIG_DIR/.rnd && touch $CONFIG_DIR/.rnd
     openssl ecparam -genkey -name prime256v1 -out "$CONFIG_DIR/private.key"
     openssl req -new -x509 -days 36500 -nodes -key "$CONFIG_DIR/private.key" -out "$CONFIG_DIR/cert.crt" -subj "/CN=www.bing.com"
 
+    # Crear Config
     cat <<EOF > "$CONFIG_FILE"
 {
     "protocol": "udp",
     "listen": ":$port",
-    "resolve_preference": "46",
+    $obfs_line
     "cert": "$CONFIG_DIR/cert.crt",
     "key": "$CONFIG_DIR/private.key",
     "alpn": "h3",
-    "auth": { "mode": "password", "config": { "password": "$pass" } }
+    "auth": {
+        "mode": "password",
+        "config": { "password": "$password" }
+    }
 }
 EOF
 
@@ -133,39 +160,39 @@ Description=Hysteria V1
 After=network.target
 [Service]
 ExecStart=$EXECUTABLE -config $CONFIG_FILE server
-WorkingDirectory=$CONFIG_DIR
-User=root
 Restart=always
+User=root
 [Install]
 WantedBy=multi-user.target
 EOF
 
-    systemctl daemon-reload && systemctl enable hysteria1-server && systemctl start hysteria1-server
-    echo -e "${COLOR[2]}Hysteria instalado con éxito.${NC}"
-    read -p "Presione Enter..."
+    systemctl daemon-reload && systemctl enable hysteria1-server && systemctl restart hysteria1-server
+    
+    echo -e "\n${COLOR[2]}✔ INSTALACIÓN COMPLETA${NC}"
+    echo -e "${COLOR[7]}Comando de acceso: ${COLOR[2]}menu_udp${NC}"
+    read -p "Presione Enter para volver..."
 }
 
 # --- Menú Principal ---
 while true; do
     clear
     echo -e "${COLOR[5]}┌──────────────────────────────────────────────┐${NC}"
-    echo -e "${COLOR[5]}│${NC}        ${COLOR[6]}GESTOR HYSTERIA V1 UNIFICADO${NC}         ${COLOR[5]}│${NC}"
+    echo -e "${COLOR[5]}│${NC}       ${COLOR[6]}GESTOR HYSTERIA V1 - MENU UDP${NC}          ${COLOR[5]}│${NC}"
     echo -e "${COLOR[5]}└──────────────────────────────────────────────┘${NC}"
-    echo -e "  ${COLOR[2]}[1]${NC} Instalar / Reinstalar"
-    echo -e "  ${COLOR[2]}[2]${NC} ${COLOR[1]}Cambiar Configuración${NC} ${COLOR[0]}(Puerto, Pass, SNI)${NC}"
+    echo -e "  ${COLOR[2]}[1]${NC} Instalar Hysteria V1"
+    echo -e "  ${COLOR[2]}[2]${NC} ${COLOR[1]}Modificar Configuración (Puerto/OBFS/Pass)${NC}"
     echo -e "  ${COLOR[2]}[3]${NC} Desinstalar"
     echo -e "  ${COLOR[5]}──────────────────────────────────────────────${NC}"
-    echo -e "  ${COLOR[2]}[4]${NC} Ver Logs"
-    echo -e "  ${COLOR[2]}[5]${NC} Mostrar Configuración Actual"
+    echo -e "  ${COLOR[2]}[4]${NC} Ver Logs en vivo"
     echo -e "  ${COLOR[2]}[0]${NC} Salir"
     echo ""
-    read -p "Opción: " opt
+    echo -ne "${COLOR[1]}Seleccione una opción:${NC} "
+    read opt
     case $opt in
-        1) install_process ;;
-        2) change_config ;;
-        3) stop_hysteria && rm -rf "$CONFIG_DIR" "$EXECUTABLE" "$SYSTEMD_SERVICE" && echo "Eliminado"; sleep 1 ;;
+        1) install_hys ;;
+        2) modify_config ;;
+        3) stop_hys && rm -rf "$CONFIG_DIR" "$EXECUTABLE" "$SYSTEMD_SERVICE" && echo "Eliminado"; sleep 1 ;;
         4) journalctl -u hysteria1-server -f ;;
-        5) clear && cat "$CONFIG_FILE" && read -p "Enter para continuar..." ;;
         0) exit ;;
     esac
 done
